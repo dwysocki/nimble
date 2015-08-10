@@ -1,4 +1,4 @@
-(defproject nimble "0.1.0-SNAPSHOT"
+(defproject nimble "0.1.0"
   :description "An expert system for playing Nim, written in Clojure."
   :url "https://github.com/dwysocki/nimble"
   :license {:name "MIT License"
