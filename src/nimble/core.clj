@@ -21,6 +21,54 @@
   []
   (println "Game over!"))
 
+(defn parse-int
+  "Parses a string to an int."
+  [n]
+  (Integer/parseInt n))
+
+(defn in? [seq elem]
+  (some (comp = elem)
+        seq))
+
+
+
+(defn keys-where
+  "Returns a seq of the keys in `map` where `pred` is true."
+  [pred map]
+  (keys (filter (fn [[k v]] (pred v))
+                map)))
+
+
+(defn indices-where
+  "Returns a seq of the indices in `coll` where `pred` is true."
+  [pred coll]
+  (keys-where pred
+              (zipmap (range) coll)))
+
+(defn parse-int? [n]
+  (try
+    (parse-int n)
+    (catch NumberFormatException e
+      nil)))
+
+(defn display-list [list]
+  (dorun (map println
+              ;; prefix all elements in the list with their index: "(n)"
+              (map #(str "(" (inc %) ")")
+                   (range))
+              list)))
+
+(defn parse-from-list [input list]
+  (let [input (string/trim input)]
+    (if-let [index (parse-int? input)]
+      (nth list (dec index))
+      (and (in? list input)
+           input))))
+
+(defn prompt-list [list]
+  (display-list list)
+  (parse-from-list (read-line) list))
+
 
 (defn try-until
   "Call a (non-deterministic) function repeatedly until `pred` is true."
@@ -28,10 +76,7 @@
   (first (filter pred
                  (repeatedly f))))
 
-(defn parse-int
-  "Parses a string to an int."
-  [n]
-  (Integer/parseInt n))
+
 
 (defn read-split-line
   "Reads a line from stdin, and splits it on a regular expression."
@@ -106,14 +151,15 @@
       (println "Error: Must be valid integers."))))
 
 
-(defn player-move
-  "Prompt the player for a move. Continues prompting until a valid move is
+(defn human-move
+  "Prompt a human player for a move. Continues prompting until a valid move is
   obtained."
-  [board]
+  [board player]
   (try-until identity
     (fn []
       ;; prompt the user
-      (print "Enter 'heap' 'count': ")
+      (print (:name player)
+             "- enter 'heap' 'count': ")
       (flush)
       ;; take user input, and return [heap count] if valid, and nil if not
       (some->> (read-split-line #"\s+")
@@ -127,6 +173,14 @@
                move-index-0->1))))
 
 
+(defn random-move
+  [board player]
+  (let [candidate-heaps (indices-where (comp not zero?) board)
+        heap (rand-nth candidate-heaps)
+        count (inc (rand-int (board heap)))]
+    [heap count]))
+
+
 (defn display-board
   "Displays the board.
 
@@ -136,19 +190,47 @@
   (println board))
 
 
+(def cpu-types
+  {"Random" random-move})
+
 (defn run-game
   "Run a game."
-  [board]
+  [board player-1 player-2]
   ;; displays the board
   (display-board board)
   (if (game-over? board)
     ;; display a game over message
     (game-over)
     (let [;; get the heap and number of pieces to remove from the player
-          [heap count] (player-move board)]
+          [heap count] ((:move-fn player-1) board player-1)]
       ;; remove the pieces and continue the loop
-      (recur (remove-pieces board heap count)))))
+      (recur (remove-pieces board heap count)
+             player-1 player-2))))
 
+(defn prompt-name [default]
+  (print "Name (optional): ")
+  (flush)
+  (let [input (string/trim (read-line))]
+    (if-not (string/blank? input)
+      input
+      default)))
+
+(defn prompt-cpu-type []
+  (println "Which type of CPU?")
+  (let [cpu-type-str (prompt-list (keys cpu-types))]
+    (cpu-types cpu-type-str)))
+
+
+(defn setup-player [n]
+  (println "Player" n)
+  (case (prompt-list ["Human" "CPU"])
+    "Human"
+    {:name    (prompt-name (str "Player " n))
+     :move-fn human-move}
+
+    "CPU"
+    {:name    (prompt-name (str "CPU " n))
+     :move-fn (prompt-cpu-type)}))
 
 (defn -main
   [& args]
@@ -156,5 +238,8 @@
   (set-break-handler! good-bye)
   ;; greet the player
   (hello)
-  ;; begin the game
-  (run-game init-board))
+  (let [;; prompt for player information
+        player-1 (setup-player 1)
+        player-2 (setup-player 2)]
+    ;; begin the game
+    (run-game init-board player-1 player-2)))
